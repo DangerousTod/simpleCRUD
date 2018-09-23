@@ -1,0 +1,211 @@
+<DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title></title>
+    <style>
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pouchdb@7.0.0/dist/pouchdb.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert"></script>
+    <script src="">https://cdn.jsdelivr.net/npm/jquery</script>
+    <script src="https://cdn.jsdelivr.net/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+  </head>
+  <body>
+    <div id="app">
+      <div class="container">
+        <p><br/><p>
+        <div class="row">
+          <div class="col-md-8">
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>id</th>
+                  <th>email</th>
+                  <th>reason</th>
+                  <th>comment</th>
+                  <th width="130">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in items" v-bind:key="item.id">
+                  <td>{{ item._id }}</td>
+                  <td>{{ item.email }}</td>
+                  <td>{{ item.reason }}</td>
+                  <td>{{ item.comment }}</td>
+                  <td class="text-center">
+                    <button @click="edit(item)" class="btn btn-warning btn-sm">Edit</button>
+                    <button @click="destroy(item)" class="btn btn-danger btn-sm">Trash</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="col-md-4">
+            <form>
+              <div class="form-group">
+                <label>id</label>
+                <input type="text" v-model="input._id" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="text" v-model="input.email" autocomplete='email' class="form-control" maxlength="35" />
+              </div>
+              <div class="form-group">
+                <label>reason</label>
+                <input type="text" v-model="input.reason" class="form-control" maxlength="35"/>
+              </div>
+              <div class="form-group">
+                <label>Comment</label>
+                <textarea class="form-control" v-model="input.comment" maxlength="326"></textarea>
+              </div>
+              <button v-if="savebtn" @click.prevent="save" class="btn btn-primary">Save</button>
+              <button v-if="updatebtn" @click.prevent="update(input._id)" class="btn btn-warning">Update</button>
+              <button @click.prevent="clear" class="btn btn-info">Clear</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <script>
+      window.db = new PouchDB('test')
+
+      var app = new Vue({
+        el: '#app',
+        data: {
+          items : [],
+          input: {
+            _id: '',
+            email: '',
+            reason: '',
+            comment: ''
+          },
+          savebtn: true,
+          updatebtn: false
+        },
+        created: function () {
+          this.view()
+          this.localData()
+          this.items = JSON.parse(localStorage.getItems('items'))
+        },
+        methods: {
+          localData: function () {
+            let parsed = JSON.stringify(this.items)
+            localStorage.setItem('items', parsed)
+          },
+          view: function () {
+            let vm = this
+            db.allDocs({
+              include_docs: true
+            }).then(function(response) {
+              for(var i = 0; i < response.rows.length; i++) {
+                vm.items.push(response.rows[i].doc)
+              }
+            }).catch(function(error) {
+              console.log(error)
+            })
+          },
+          save: function () {
+            var id = this.input._id
+            var em = this.input.email
+            var rs = this.input.reason
+            var cm = this.input.comment
+
+            db.put({
+              _id: id,
+              email: em,
+              reason: rs,
+              comment: cm
+            }).then(function(response){
+
+            }).catch(function(error) {
+              console.log(error)
+            })
+
+            this.items.push({_id: id, email: em, reason: rs, comment: cm})
+            this.clear()
+
+            this.localData()
+
+            swal('Added', 'Thank you', 'success')
+          },
+          clear: function () {
+            this.savebtn = true
+            this.updatebtn = false
+            this.input._id = ''
+            this.input.email = ''
+            this.input.reason = ''
+            this.input.comment = ''
+
+          },
+          edit: function (item) {
+            this.savebtn = false
+            this.updatebtn = true
+            this.input._id = item._id
+            this.input.email = item.email
+            this.input.reason = item.reason
+            this.input.comment = item.comment
+          },
+          update: function (id) {
+            var myid = id - 1
+            Object.assign(this.items[myid], this.input)
+
+            var em = this.input.email
+            var rs = this.input.reason
+            var cm = this.input.comment
+
+            db.get(id).then(function(doc){
+              return db.put({
+                _id: id,
+                _rev: doc._rev,
+                email: em,
+                reason: rs,
+                comment: cm
+              })
+            }).then(function(response){
+
+            }).catch(function(error){
+              console.log(error)
+            })
+
+            this.clear()
+
+            this.localData()
+
+            swal('Updated', 'Good Work', 'warning')
+          },
+          destroy: function (item) {
+            var del = this.items.indexOf(item)
+            swal({
+              title: "Are you sure",
+              text: "Input will be destroyed",
+              icon: 'error',
+              buttons: true,
+              dangerMode: true
+            }).then((willDelete) => {
+              if(willDelete){
+                this.items.splice(del, 1)
+                db.get(item._id).then(function(doc){
+                  return db.remove(doc)
+                }).then(function(response){
+
+                }).catch(function(error){
+                  console.log(error)
+                })
+              } else {
+                
+              }
+            })
+          }
+        }
+      })
+
+    </script>
+  </body>
+</html>
